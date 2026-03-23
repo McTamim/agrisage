@@ -1,3 +1,4 @@
+// screens/LoginScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -5,47 +6,32 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
-  Keyboard,
-  TouchableWithoutFeedback,
-  KeyboardAvoidingView,
   Platform,
+  KeyboardAvoidingView,
+  ScrollView,
+  Alert,
   Image,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Animatable from 'react-native-animatable';
 import { Ionicons } from '@expo/vector-icons';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase.js";
-
-WebBrowser.maybeCompleteAuthSession();
+import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // --- Google Auth Configuration ---
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: "TON_ANDROID_CLIENT_ID.apps.googleusercontent.com",
-    iosClientId: "TON_IOS_CLIENT_ID.apps.googleusercontent.com",
-    expoClientId: "TON_EXPO_CLIENT_ID.apps.googleusercontent.com",
-  });
-
-  // Si la connexion Google réussit
-  useEffect(() => {
-    if (response?.type === 'success') {
-      navigation.replace('Accueil');
-    }
-  }, [response]);
-
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs ⚠️');
+      return;
+    }
+
     try {
       const storedUser = await AsyncStorage.getItem('user');
-
       if (!storedUser) {
-        Alert.alert('Erreur', 'Aucun compte trouvé. Veuillez vous inscrire.');
+        Alert.alert('Erreur', "Aucun compte trouvé. Inscrivez-vous !");
         return;
       }
 
@@ -56,151 +42,183 @@ export default function LoginScreen({ navigation }) {
       } else {
         Alert.alert('Erreur', 'Identifiants incorrects ❌');
       }
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Erreur', 'Impossible de vérifier les identifiants.');
+    } catch (e) {
+      Alert.alert('Erreur', 'Connexion impossible 😢');
     }
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <LinearGradient colors={['#A8E6CF', '#DCEDC1']} style={styles.container}>
       <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <View style={styles.inner}>
-          <Text style={styles.title}>🌱 AgriSage</Text>
+        <ScrollView
+          contentContainerStyle={styles.center}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animatable.View animation="fadeInUp" style={styles.card}>
+            <Text style={styles.title}>🌿 Connexion</Text>
 
-          {/* Champ Email */}
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          {/* Champ Mot de passe + visibilité */}
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Mot de passe"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={showPassword ? 'eye' : 'eye-off'}
-                size={22}
-                color="#555"
+            {/* EMAIL */}
+            <View style={styles.inputContainer}>
+              <Ionicons name="mail-outline" size={20} color="#2E8B57" />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
+            </View>
+
+            {/* PASSWORD */}
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#2E8B57" />
+              <TextInput
+                style={styles.input}
+                placeholder="Mot de passe"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons
+                  name={showPassword ? 'eye' : 'eye-off'}
+                  size={22}
+                  color="#555"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* LOGIN BUTTON */}
+            <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
+              <Text style={styles.primaryText}>Se connecter</Text>
+            </TouchableOpacity>N
+
+            {/* OR */}
+            <Text style={styles.orText}>────── OU ──────</Text>
+
+            {/* GOOGLE */}
+            <TouchableOpacity style={styles.googleButton}>
+              <Image
+                source={require('../assets/google.png')}
+                style={styles.googleIcon}
+              />
+              <Text style={styles.googleText}>Se connecter avec Google</Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Bouton de connexion */}
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <Text style={styles.loginText}>Se connecter</Text>
-          </TouchableOpacity>
-
-          {/* Séparateur */}
-          <Text style={styles.orText}>──────────  OU  ──────────</Text>
-
-          {/* Bouton Google */}
-          <TouchableOpacity
-            style={styles.googleButton}
-            disabled={!request}
-            onPress={() => promptAsync()}
-          >
-            <Image
-              source={{
-                uri: 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo_2013_Google.png',
-              }}
-              style={styles.googleIcon}
-            />
-            <Text style={styles.googleText}>Se connecter avec Google</Text>
-          </TouchableOpacity>
-
-          {/* Lien inscription */}
-          <Text style={styles.signupText}>
-            Pas de compte ?{' '}
-            <Text
-              style={styles.signupLink}
-              onPress={() => navigation.navigate('Signup')}
-            >
-              S'inscrire
+            {/* SIGNUP */}
+            <Text style={styles.footerText}>
+              Pas encore de compte ?{' '}
+              <Text
+                style={styles.footerLink}
+                onPress={() => navigation.replace('Signup')}
+              >
+                S'inscrire
+              </Text>
             </Text>
-          </Text>
-        </View>
+          </Animatable.View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  inner: {
+  container: {
     flex: 1,
+  },
+
+  center: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#F6FFF6',
+    padding: 20,
   },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 40, color: '#2E8B57' },
 
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    padding: 12,
-    marginVertical: 10,
+  card: {
+    width: Platform.OS === 'web' ? 420 : '100%',
+    maxWidth: 450,
     backgroundColor: '#fff',
+    borderRadius: 25,
+    padding: 25,
+    elevation: 6,
   },
 
-  passwordContainer: {
-    width: '100%',
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#2E8B57',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 25,
+    paddingHorizontal: 15,
     marginVertical: 10,
-    backgroundColor: '#fff',
   },
-  passwordInput: { flex: 1, padding: 12 },
-  eyeButton: { paddingHorizontal: 10 },
 
-  loginButton: {
+  input: {
+    flex: 1,
+    marginLeft: 10,
+    paddingVertical: 12,
+  },
+
+  primaryButton: {
     backgroundColor: '#2E8B57',
-    borderRadius: 10,
+    borderRadius: 25,
     paddingVertical: 14,
-    width: '100%',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 20,
   },
-  loginText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 
-  orText: { color: '#777', marginVertical: 20, fontWeight: 'bold' },
+  primaryText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+
+  orText: {
+    textAlign: 'center',
+    marginVertical: 20,
+    color: '#555',
+    fontWeight: 'bold',
+  },
 
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    borderRadius: 25,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#ddd',
-    width: '100%',
-    justifyContent: 'center',
   },
-  googleIcon: { width: 24, height: 24, marginRight: 10 },
-  googleText: { fontSize: 15, color: '#333' },
 
-  signupText: { marginTop: 20, fontSize: 14 },
-  signupLink: { color: '#1E90FF', fontWeight: 'bold' },
+  googleIcon: {
+    width: 22,
+    height: 22,
+    marginRight: 10,
+  },
+
+  googleText: {
+    fontSize: 15,
+    color: '#333',
+  },
+
+  footerText: {
+    textAlign: 'center',
+    marginTop: 20,
+  },
+
+  footerLink: {
+    color: '#1E90FF',
+    fontWeight: 'bold',
+  },
 });

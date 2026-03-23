@@ -22,8 +22,8 @@ export default function SplashScreen({ navigation }) {
         autoPlay
         loop={false}
         style={{
-          width: width * 10,   // 80% de la largeur de l'écran
-          height: height * 50, // 50% de la hauteur
+          width: width * 2,   // 80% de la largeur de l'écran
+          height: height * 5, // 50% de la hauteur
         }}
       />
     </View>
