@@ -2,4 +2,6 @@
   "buildCommand": "expo export --platform web",
   "outputDirectory": "dist",
   "framework": null
+   "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
 }
