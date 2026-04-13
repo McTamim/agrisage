@@ -25,6 +25,9 @@ import * as Audio from 'expo-audio';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { getWeather } from "../api/weather.js";
+import { askGemini } from "../api/gemini.js";
+import { identifyPlantAPI } from "../api/plan,id.js";
 
 
 export default function Accueil() {
@@ -34,7 +37,7 @@ export default function Accueil() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [user, setUser] = useState({ name: 'Mc', photo: null });
+ 
   const [weather, setWeather] = useState(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [favorites, setFavorites] = useState([]);
@@ -49,41 +52,22 @@ export default function Accueil() {
   const navigation = useNavigation();
 
 
-    <ScrollView style={{ flex: 1 }}>
-      {Array.from({ length: 50 }).map((_, i) => (
-        <Text key={i} style={{ padding: 20, fontSize: 16 }}>
-          Item {i + 1}
-        </Text>
-      ))}
-    </ScrollView>
 
   // --- Météo ---
-  useEffect(() => {
-    const fetchWeather = async () => {
-      try {
-        const apiKey = '351fe61f4a315e74845eabed6f1ae055';
-        const city = 'Dschang';
-        const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric&lang=fr`;
-        const res = await fetch(url);
-        const data = await res.json();
+ useEffect(() => {
+  const fetchWeather = async () => {
+    const res = await fetch(
+      "https://agrisage-mc.vercel.app/api/weather?city=Dschang"
+    );
 
-        if (res.ok) {
-          setWeather({
-            temp: Math.round(data.main.temp),
-            description: data.weather[0].description,
-            icon: data.weather[0].icon,
-            city: data.name,
-          });
-        } else {
-          Alert.alert('Erreur météo', data.message);
-        }
-      } catch (err) {
-        console.error(err);
-        Alert.alert('Erreur', 'Impossible de récupérer la météo.');
-      }
-    };
-    fetchWeather();
-  }, []);
+    const data = await res.json();
+    setWeather(data);
+  };
+
+  fetchWeather();
+}, []);
+   // ---AI chatbot ---//
+   
 
   // --- Permissions ---
   useEffect(() => {
@@ -157,71 +141,33 @@ export default function Accueil() {
     setMessages((prev) => [...prev, aiMessage]);
 
     // --- Appel Gemini ---
-    const geminiApiKey = 'AIzaSyBXR9Zyc-NN3K_qhAEsFua9gRDZbus52Ds'; // Remplace par ta clé Gemini
-    let aiResponse = 'Réponse IA indisponible';
-
-    if (geminiApiKey && text) {
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text }] }] }),
-          }
-        );
-        if (!res.ok) {
-          const errText = await res.text();
-          console.error('Erreur Gemini:', errText);
-          throw new Error(`Erreur réseau: ${res.status}`);
-        }
-        const data = await res.json();
-        aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Aucune réponse reçue';
-      } catch (err) {
-        console.error('Erreur Gemini:', err);
-        aiResponse = 'Erreur lors de la communication avec Gemini.';
-      }
+    
+   const askAI = async (text) => {
+  const res = await fetch(
+    "https://agrisage-mc.vercel.app/api/gemini",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
     }
+  );
 
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === aiMessage.id ? { ...msg, text: aiResponse, loading: false } : msg
-      )
-    );
-    setHistory((prev) => [text || 'Message envoyé', ...prev]);
-
-    if (isAtBottom) flatListRef.current.scrollToEnd({ animated: true });
-  };
+  const data = await res.json();
+  return data.reply;
+};
 
   // --- Identifier la plante + maladie ---
-  const identifyPlant = async (imageUri) => {
-    try {
-      const plantIdApiKey = 'I1IZDwtXUxxoh0m51sW5Rb1vXFwl6wriPXqcDV13hGadxeNVCf';
-      const formData = new FormData();
-      formData.append('images', { uri: imageUri, name: 'plant.jpg', type: 'image/jpeg' });
-
-      const plantIdRes = await fetch('https://api.plant.id/v2/identify', {
-        method: 'POST',
-        headers: { 'Api-Key': plantIdApiKey },
-        body: formData,
-      });
-      const plantIdData = await plantIdRes.json();
-
-      let resultText = 'Impossible de détecter la plante.';
-      if (plantIdData.suggestions && plantIdData.suggestions.length > 0) {
-        const best = plantIdData.suggestions[0];
-        resultText = `Plante : ${best.plant_name}
-Maladie probable : ${best.disease || 'Aucune'}
-Confiance : ${(best.probability * 100).toFixed(1)}%`;
-      }
-
-      sendMessage(resultText, imageUri);
-    } catch (err) {
-      console.error(err);
-      sendMessage('Erreur lors de l’identification de la plante.', imageUri);
+ const identifyPlant = async (formData) => {
+  const res = await fetch(
+    "https://agrisage-mc.vercel.app/api/plant",
+    {
+      method: "POST",
+      body: formData,
     }
-  };
-  
+  );
+
+  return await res.json();
+};
 
   // --- Galerie & Caméra ---
   const pickImageFromGallery = async () => {
