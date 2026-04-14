@@ -4,17 +4,18 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  Alert,
+  Pressable
 } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Animatable from 'react-native-animatable';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import storage from '../utils/storage'; // ✅ IMPORTANT
 
 export default function SignupScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -24,21 +25,28 @@ export default function SignupScreen({ navigation }) {
 
   const handleSignup = async () => {
     if (!email || !password || !confirmPassword) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs ⚠️');
+      alert("Veuillez remplir tous les champs ⚠️");
       return;
     }
+
     if (password !== confirmPassword) {
-      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas ❌');
+      alert("Les mots de passe ne correspondent pas ❌");
       return;
     }
 
     try {
       const user = { email, password };
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      Alert.alert('Succès ✅', 'Compte créé avec succès !');
+
+      // ✅ stockage compatible web + mobile
+      await storage.setItem('user', JSON.stringify(user));
+
+      alert("Compte créé avec succès ✅");
+
       navigation.replace('Login');
+
     } catch (e) {
-      Alert.alert('Erreur', 'Création du compte impossible 😢');
+      console.log(e);
+      alert("Création du compte impossible 😢");
     }
   };
 
@@ -62,6 +70,7 @@ export default function SignupScreen({ navigation }) {
                 style={styles.input}
                 placeholder="Email"
                 keyboardType="email-address"
+                autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
               />
@@ -77,13 +86,14 @@ export default function SignupScreen({ navigation }) {
                 value={password}
                 onChangeText={setPassword}
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+
+              <Pressable onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
                   name={showPassword ? 'eye' : 'eye-off'}
                   size={22}
                   color="#555"
                 />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* CONFIRM PASSWORD */}
@@ -99,9 +109,9 @@ export default function SignupScreen({ navigation }) {
             </View>
 
             {/* BUTTON */}
-            <TouchableOpacity style={styles.signupButton} onPress={handleSignup}>
+            <Pressable style={styles.signupButton} onPress={handleSignup}>
               <Text style={styles.signupText}>S'inscrire</Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {/* LOGIN */}
             <Text style={styles.loginText}>
@@ -113,6 +123,7 @@ export default function SignupScreen({ navigation }) {
                 Se connecter
               </Text>
             </Text>
+
           </Animatable.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -121,14 +132,12 @@ export default function SignupScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
 
   center: {
     flexGrow: 1,
-    justifyContent: 'center',   // CENTRAGE VERTICAL
-    alignItems: 'center',       // CENTRAGE HORIZONTAL
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
 
