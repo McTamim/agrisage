@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TextInput,
   TouchableOpacity,
   FlatList,
@@ -17,27 +16,25 @@ import {
   Keyboard,
   Animated,
   TouchableWithoutFeedback,
-  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import * as Audio from 'expo-audio';
+import { Audio } from 'expo-av'; // ✅ Correction : expo-av au lieu de expo-audio
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
-import { getWeather } from "../api/weather.js";
-import { askGemini } from "../api/gemini.js";
-import { identifyPlantAPI } from "../api/plan,id.js";
 
 
 export default function Accueil() {
+  // ✅ Correction : user défini localement (à remplacer par ton contexte/auth)
+  const user = { name: 'McArmstrong', photo: null };
+
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [history, setHistory] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
- 
   const [weather, setWeather] = useState(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [favorites, setFavorites] = useState([]);
@@ -51,23 +48,21 @@ export default function Accueil() {
 
   const navigation = useNavigation();
 
-
-
   // --- Météo ---
- useEffect(() => {
-  const fetchWeather = async () => {
-    const res = await fetch(
-      "https://agrisage-mc.vercel.app/api/weather?city=Dschang"
-    );
-
-    const data = await res.json();
-    setWeather(data);
-  };
-
-  fetchWeather();
-}, []);
-   // ---AI chatbot ---//
-   
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        const res = await fetch(
+          "https://agrisage-mc.vercel.app/api/weather?city=Dschang"
+        );
+        const data = await res.json();
+        setWeather(data);
+      } catch (e) {
+        console.error("Erreur météo :", e);
+      }
+    };
+    fetchWeather();
+  }, []);
 
   // --- Permissions ---
   useEffect(() => {
@@ -75,7 +70,7 @@ export default function Accueil() {
       if (Platform.OS !== 'web') {
         const { status: cam } = await ImagePicker.requestCameraPermissionsAsync();
         const { status: gal } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        const { status: mic } = await Audio.requestMicrophonePermissionsAsync();
+        const { status: mic } = await Audio.requestPermissionsAsync(); // ✅ Correction
         if (cam !== 'granted' || gal !== 'granted' || mic !== 'granted') {
           Alert.alert('Permissions requises', 'Caméra, micro et galerie nécessaires.');
         }
@@ -126,6 +121,42 @@ export default function Accueil() {
     Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
   }, [user.name]);
 
+  // ✅ Correction : askAI déplacé au niveau du composant
+  const askAI = async (text) => {
+    try {
+      const res = await fetch("https://agrisage-mc.vercel.app/api/gemini", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      return data.reply;
+    } catch (e) {
+      console.error("Erreur askAI :", e);
+      return "Une erreur est survenue.";
+    }
+  };
+
+  // ✅ Correction : identifyPlant déplacé au niveau du composant
+  const identifyPlant = async (formData) => {
+    try {
+      const res = await fetch("https://agrisage-mc.vercel.app/api/plant", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+
+      const plantMessage = {
+        id: Date.now().toString(),
+        text: result.description || "Plante identifiée.",
+        isUser: false,
+      };
+      setMessages((prev) => [...prev, plantMessage]);
+    } catch (e) {
+      console.error("Erreur identifyPlant :", e);
+    }
+  };
+
   // --- Envoyer message ---
   const sendMessage = async (text, imageUri, audioUri) => {
     if (!text && !imageUri && !audioUri) return;
@@ -134,72 +165,92 @@ export default function Accueil() {
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
 
+    if (text) {
+      setHistory((prev) => [text, ...prev]);
+    }
+
     scaleAnim.setValue(0);
     Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }).start();
 
-    const aiMessage = { id: (Date.now() + 1).toString(), isUser: false, loading: true };
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiMessage = { id: aiMessageId, isUser: false, loading: true };
     setMessages((prev) => [...prev, aiMessage]);
 
-    // --- Appel Gemini ---
-    
-   const askAI = async (text) => {
-  const res = await fetch(
-    "https://agrisage-mc.vercel.app/api/gemini",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    }
-  );
+    const reply = text ? await askAI(text) : "Message audio/image reçu.";
 
-  const data = await res.json();
-  return data.reply;
-};
-
-  // --- Identifier la plante + maladie ---
- const identifyPlant = async (formData) => {
-  const res = await fetch(
-    "https://agrisage-mc.vercel.app/api/plant",
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
-
-  return await res.json();
-};
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === aiMessageId ? { ...msg, loading: false, text: reply } : msg
+      )
+    );
+  };
 
   // --- Galerie & Caméra ---
   const pickImageFromGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 1 });
-    if (!result.canceled) identifyPlant(result.assets[0].uri);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+    if (!result.canceled) {
+      // ✅ Correction : construction du FormData correctement
+      const formData = new FormData();
+      formData.append('image', {
+        uri: result.assets[0].uri,
+        type: 'image/jpeg',
+        name: 'photo.jpg',
+      });
+      identifyPlant(formData);
+    }
   };
+
   const takePhotoWithCamera = async () => {
     const result = await ImagePicker.launchCameraAsync({ quality: 1 });
-    if (!result.canceled) identifyPlant(result.assets[0].uri);
+    if (!result.canceled) {
+      // ✅ Correction : construction du FormData correctement
+      const formData = new FormData();
+      formData.append('image', {
+        uri: result.assets[0].uri,
+        type: 'image/jpeg',
+        name: 'photo.jpg',
+      });
+      identifyPlant(formData);
+    }
   };
 
   // --- Audio ---
   const startRecording = async () => {
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
+      const { recording: rec } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(rec);
       setIsRecording(true);
     } catch {
-      Alert.alert('Erreur', 'Impossible de démarrer l’enregistrement');
+      // ✅ Correction : apostrophe correcte
+      Alert.alert('Erreur', "Impossible de démarrer l'enregistrement");
     }
   };
+
   const stopRecording = async () => {
     setIsRecording(false);
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
+    setRecording(null);
     sendMessage(null, null, uri);
   };
 
   // --- Sidebar ---
   const Sidebar = () => (
-    <Animated.View style={[styles.sidebar, { transform: [{ translateX: sidebarAnim }], backgroundColor: darkMode ? '#222' : '#fff' }]}>
+    <Animated.View
+      style={[
+        styles.sidebar,
+        {
+          transform: [{ translateX: sidebarAnim }],
+          backgroundColor: darkMode ? '#222' : '#fff',
+        },
+      ]}
+    >
       <View style={styles.sidebarHeader}>
         {user.photo ? (
           <Image source={{ uri: user.photo }} style={styles.sidebarAvatar} />
@@ -209,28 +260,29 @@ export default function Accueil() {
           </View>
         )}
         <View>
-          <Text style={[styles.sidebarUserName, { color: darkMode ? '#fff' : '#2E7D32' }]}>{user.name || 'Mc'}</Text>
-          <Text style={[styles.sidebarUserStatus, { color: darkMode ? '#aaa' : '#777' }]}>Connecté 🌿</Text>
+          <Text style={[styles.sidebarUserName, { color: darkMode ? '#fff' : '#2E7D32' }]}>
+            {user.name || 'Mc'}
+          </Text>
+          <Text style={[styles.sidebarUserStatus, { color: darkMode ? '#aaa' : '#777' }]}>
+            Connecté 🌿
+          </Text>
         </View>
       </View>
+
       <View style={{ marginTop: 20 }}>
- 
-  <TouchableOpacity
-    style={[styles.sidebarButton, { marginTop: 10 }]}
-    onPress={() => {
-      setSidebarVisible(false);
-      navigation.navigate('Experts');
-    }}
-  >
-    <Ionicons name="people-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-    <Text style={styles.sidebarButtonText}>Experts locaux</Text>
-  </TouchableOpacity>
-</View>
+        <TouchableOpacity
+          style={[styles.sidebarButton, { marginTop: 10 }]}
+          onPress={() => {
+            setSidebarVisible(false);
+            navigation.navigate('Experts');
+          }}
+        >
+          <Ionicons name="people-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.sidebarButtonText}>Experts locaux</Text>
+        </TouchableOpacity>
+      </View>
 
-
-  
-
-      <Text style={[styles.sidebarTitle, { color: darkMode ? '#4CAF50' : '#4CAF50' }]}>🕒 Historique</Text>
+      <Text style={[styles.sidebarTitle, { color: '#4CAF50' }]}>🕒 Historique</Text>
       {history.length > 0 ? (
         <FlatList
           data={history.filter((h) => h.toLowerCase().includes(searchHistory.toLowerCase()))}
@@ -243,15 +295,19 @@ export default function Accueil() {
           )}
         />
       ) : (
-        <Text style={[styles.noHistory, { color: darkMode ? '#aaa' : '#777' }]}>Aucun message pour le moment...</Text>
+        <Text style={[styles.noHistory, { color: darkMode ? '#aaa' : '#777' }]}>
+          Aucun message pour le moment...
+        </Text>
       )}
 
       <View style={styles.sidebarDivider} />
 
-      
-      <TouchableOpacity style={styles.logoutButton} onPress={() => navigation.replace('parametre')}>
+      <TouchableOpacity
+        style={styles.logoutButton}
+        onPress={() => navigation.replace('parametre')}
+      >
         <Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-        <Text style={styles.logoutText}>para</Text>
+        <Text style={styles.logoutText}>Paramètres</Text>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -267,7 +323,9 @@ export default function Accueil() {
       >
         {item.loading && <ActivityIndicator color="#007AFF" />}
         {item.text && <Text style={styles.messageText}>{item.text}</Text>}
-        {item.imageUri && <Image source={{ uri: item.imageUri }} style={styles.messageImage} />}
+        {item.imageUri && (
+          <Image source={{ uri: item.imageUri }} style={styles.messageImage} />
+        )}
         {item.audioUri && (
           <TouchableOpacity
             style={styles.audioButton}
@@ -280,12 +338,15 @@ export default function Accueil() {
             <Text style={{ marginLeft: 6 }}>Écouter audio</Text>
           </TouchableOpacity>
         )}
-        {/* Ajouter aux favoris */}
         <TouchableOpacity
           style={{ position: 'absolute', top: 6, right: 6 }}
           onPress={() => setFavorites((prev) => [...prev, item])}
         >
-          <Feather name="star" size={20} color={favorites.includes(item) ? '#FFD700' : '#ccc'} />
+          <Feather
+            name="star"
+            size={20}
+            color={favorites.includes(item) ? '#FFD700' : '#ccc'}
+          />
         </TouchableOpacity>
       </LinearGradient>
     </Animated.View>
@@ -307,14 +368,24 @@ export default function Accueil() {
           if (sidebarVisible) setSidebarVisible(false);
         }}
       >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           {/* Header */}
           <View style={[styles.header, { backgroundColor: darkMode ? '#333' : '#4CAF50' }]}>
             <TouchableOpacity style={styles.userAvatar}>
-              {user.photo ? <Image source={{ uri: user.photo }} style={styles.userImage} /> : <Text style={styles.userInitial}>{user.name.charAt(0)}</Text>}
+              {user.photo ? (
+                <Image source={{ uri: user.photo }} style={styles.userImage} />
+              ) : (
+                <Text style={styles.userInitial}>{user.name.charAt(0)}</Text>
+              )}
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: darkMode ? '#fff' : '#fff' }]}>AgriSage</Text>
-            <TouchableOpacity style={styles.menuButton} onPress={() => setSidebarVisible(!sidebarVisible)}>
+            <Text style={[styles.headerTitle, { color: '#fff' }]}>AgriSage</Text>
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setSidebarVisible(!sidebarVisible)}
+            >
               <Ionicons name="menu" size={30} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -322,8 +393,12 @@ export default function Accueil() {
           <Sidebar />
 
           {/* Message de bienvenue + météo */}
-          <Animated.View style={{ alignItems: 'center', marginVertical: 10, transform: [{ scale: scaleAnim }] }}>
-            <Text style={[styles.welcomeText, { color: darkMode ? '#fff' : '#2E7D32' }]}>Bienvenue à {user.name} 🌿</Text>
+          <Animated.View
+            style={{ alignItems: 'center', marginVertical: 10, transform: [{ scale: scaleAnim }] }}
+          >
+            <Text style={[styles.welcomeText, { color: darkMode ? '#fff' : '#2E7D32' }]}>
+              Bienvenue à {user.name} 🌿
+            </Text>
             {weather ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                 <Image
@@ -354,10 +429,10 @@ export default function Accueil() {
             showsVerticalScrollIndicator={false}
             onScroll={handleScroll}
             onContentSizeChange={() => {
-              if (isAtBottom) flatListRef.current.scrollToEnd({ animated: true });
+              if (isAtBottom) flatListRef.current?.scrollToEnd({ animated: true });
             }}
             onLayout={() => {
-              if (isAtBottom) flatListRef.current.scrollToEnd({ animated: false });
+              if (isAtBottom) flatListRef.current?.scrollToEnd({ animated: false });
             }}
           />
 
@@ -428,25 +503,12 @@ const styles = StyleSheet.create({
   sidebarUserName: { fontSize: 16, fontWeight: 'bold' },
   sidebarUserStatus: { fontSize: 13 },
   sidebarDivider: { height: 1, backgroundColor: '#EEE', marginVertical: 10 },
-  sidebarTitle: { fontSize: 17, fontWeight: 'bold', marginBottom: 10 },
+  sidebarTitle: { fontSize: 17, fontWeight: 'bold', marginBottom: 10, marginTop: 16 },
   historyItemContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   historyItem: { fontSize: 14 },
   noHistory: { fontSize: 14, fontStyle: 'italic' },
   logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 'auto', paddingVertical: 10, backgroundColor: '#4CAF50', borderRadius: 8 },
   logoutText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  sidebarButton: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingVertical: 10,
-  paddingHorizontal: 12,
-  backgroundColor: '#4CAF50',
-  borderRadius: 8,
-},
-sidebarButtonText: {
-  color: '#fff',
-  fontSize: 16,
-  fontWeight: 'bold',
-},
-
+  sidebarButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#4CAF50', borderRadius: 8 },
+  sidebarButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
-
