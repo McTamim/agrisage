@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     const response = await fetch("https://api.plant.id/v2/identify", {
       method: "POST",
       headers: {
-        "Api-Key": process.env.PLANT_API_KEY,
+        "Api-Key": process.env.plant_id,
       },
       body: formData,
     });
