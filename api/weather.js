@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   try {
     const city = req.query.city || "Yaoundé";
 
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.WEATHER_API_KEY}&units=metric&lang=fr`;
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${process.env.met}&units=méteoic&lang=fr`;
 
     const response = await fetch(url);
     const data = await response.json();
