@@ -95,7 +95,7 @@ export default function LoginScreen({ navigation }) {
             {/* LOGIN BUTTON */}
             <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
               <Text style={styles.primaryText}>Se connecter</Text>
-            </TouchableOpacity>N
+            </TouchableOpacity>
 
             {/* OR */}
             <Text style={styles.orText}>────── OU ──────</Text>
